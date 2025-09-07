@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>试剂二维码查找</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin: 0; padding: 0; background: #f0f0f0; }
+    #container { position: relative; display: inline-block; }
+    video { width: 100vw; max-width: 600px; }
+    canvas { position: absolute; top: 0; left: 0; }
+    input, button { margin: 5px; font-size: 16px; padding: 5px; }
+  </style>
+</head>
+<body>
+  <h2>试剂二维码查找</h2>
+  <input type="text" id="keyword" placeholder="输入试剂编号关键字" />
+  <button id="startBtn">开始扫描</button>
+  <div id="container">
+    <video id="video" autoplay></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <!-- ZXing-js 库 -->
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
+  <script>
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+    const keywordInput = document.getElementById('keyword');
+
+    let keyword = '';
+
+    startBtn.addEventListener('click', async () => {
+      keyword = keywordInput.value.trim();
+      if(!keyword) { alert('请输入关键字'); return; }
+
+      // 获取摄像头
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      video.srcObject = stream;
+
+      video.addEventListener('loadedmetadata', () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        scanFrame();
+      });
+    });
+
+    function scanFrame() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      try {
+        const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(video);
+        const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+        const result = codeReader.decodeMultiple(binaryBitmap);
+        result.forEach(r => {
+          if(r.text.includes(keyword)) {
+            const points = r.resultPoints;
+            if(points.length > 0){
+              const xs = points.map(p => p.x);
+              const ys = points.map(p => p.y);
+              const x = Math.min(...xs);
+              const y = Math.min(...ys);
+              const w = Math.max(...xs) - x;
+              const h = Math.max(...ys) - y;
+              ctx.strokeStyle = 'red';
+              ctx.lineWidth = 4;
+              ctx.strokeRect(x, y, w, h);
+              ctx.font = "20px sans-serif";
+              ctx.fillStyle = 'red';
+              ctx.fillText(r.text, x, y > 20 ? y-5 : y+25);
+            }
+          }
+        });
+      } catch(e) {
+        // 捕获无二维码错误
+      }
+      requestAnimationFrame(scanFrame);
+    }
+  </script>
+</body>
+</html>
