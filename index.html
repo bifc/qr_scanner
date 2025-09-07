@@ -81,24 +81,25 @@ const keywordInput = document.getElementById('keyword');
 
 let keyword = '';
 let scanning = false;
+let alphaToggle = false; // 控制闪烁
 
-// 绘制红框，使用视频原始分辨率坐标
-function drawBoundingBox(code) {
-  ctx.strokeStyle = 'red';
-  ctx.lineWidth = 4;
+// 绘制蓝色半透明方块（闪烁）
+function drawHighlight(code) {
+  alphaToggle = !alphaToggle;
+  ctx.fillStyle = `rgba(0, 0, 255, ${alphaToggle ? 0.6 : 0.3})`;
   ctx.beginPath();
   ctx.moveTo(code.location.topLeftCorner.x, code.location.topLeftCorner.y);
   ctx.lineTo(code.location.topRightCorner.x, code.location.topRightCorner.y);
   ctx.lineTo(code.location.bottomRightCorner.x, code.location.bottomRightCorner.y);
   ctx.lineTo(code.location.bottomLeftCorner.x, code.location.bottomLeftCorner.y);
   ctx.closePath();
-  ctx.stroke();
+  ctx.fill();
 }
 
 // 绘制二维码文字
 function drawText(code, isMatch=false) {
   ctx.font = "18px sans-serif";
-  ctx.fillStyle = isMatch ? 'red' : 'blue';
+  ctx.fillStyle = isMatch ? 'blue' : 'gray';
   ctx.fillText(code.data, code.location.topLeftCorner.x, Math.max(code.location.topLeftCorner.y - 5, 20));
 }
 
@@ -116,7 +117,7 @@ function scanFrame() {
     if (code) {
       const isMatch = keyword && code.data.includes(keyword);
       drawText(code, isMatch);
-      if (isMatch) drawBoundingBox(code);
+      if (isMatch) drawHighlight(code);
     }
   }
 
@@ -132,7 +133,6 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
 
-    // canvas 与视频原始分辨率一致
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
