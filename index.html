@@ -39,9 +39,7 @@
     font-size: 16px;
     cursor: pointer;
   }
-  #startBtn:active {
-    background-color: #0056b3;
-  }
+  #startBtn:active { background-color: #0056b3; }
   #container { 
     position: relative; 
     display: inline-block; 
@@ -53,6 +51,7 @@
     height: auto; 
     border-radius: 12px; 
     background: #000; 
+    display: block;
   }
   canvas { 
     position: absolute; 
@@ -83,30 +82,27 @@ const keywordInput = document.getElementById('keyword');
 let keyword = '';
 let scanning = false;
 
+// 绘制红框，使用视频原始分辨率坐标
 function drawBoundingBox(code) {
-  const scaleX = canvas.clientWidth / canvas.width;
-  const scaleY = canvas.clientHeight / canvas.height;
-
   ctx.strokeStyle = 'red';
   ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(code.location.topLeftCorner.x * scaleX, code.location.topLeftCorner.y * scaleY);
-  ctx.lineTo(code.location.topRightCorner.x * scaleX, code.location.topRightCorner.y * scaleY);
-  ctx.lineTo(code.location.bottomRightCorner.x * scaleX, code.location.bottomRightCorner.y * scaleY);
-  ctx.lineTo(code.location.bottomLeftCorner.x * scaleX, code.location.bottomLeftCorner.y * scaleY);
+  ctx.moveTo(code.location.topLeftCorner.x, code.location.topLeftCorner.y);
+  ctx.lineTo(code.location.topRightCorner.x, code.location.topRightCorner.y);
+  ctx.lineTo(code.location.bottomRightCorner.x, code.location.bottomRightCorner.y);
+  ctx.lineTo(code.location.bottomLeftCorner.x, code.location.bottomLeftCorner.y);
   ctx.closePath();
   ctx.stroke();
 }
 
+// 绘制二维码文字
 function drawText(code, isMatch=false) {
-  const scaleX = canvas.clientWidth / canvas.width;
-  const scaleY = canvas.clientHeight / canvas.height;
-
   ctx.font = "18px sans-serif";
   ctx.fillStyle = isMatch ? 'red' : 'blue';
-  ctx.fillText(code.data, code.location.topLeftCorner.x * scaleX, Math.max(code.location.topLeftCorner.y * scaleY - 5, 20));
+  ctx.fillText(code.data, code.location.topLeftCorner.x, Math.max(code.location.topLeftCorner.y - 5, 20));
 }
 
+// 实时扫描视频帧
 function scanFrame() {
   if (!scanning) return;
 
@@ -127,6 +123,7 @@ function scanFrame() {
   requestAnimationFrame(scanFrame);
 }
 
+// 启动摄像头
 async function startCamera() {
   keyword = keywordInput.value.trim();
 
@@ -135,6 +132,7 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
 
+    // canvas 与视频原始分辨率一致
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
