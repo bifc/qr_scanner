@@ -81,11 +81,10 @@ const keywordInput = document.getElementById('keyword');
 
 let keyword = '';
 let scanning = false;
-let time = 0; // 用于控制闪烁
+let time = 0; // 控制闪烁
 
 // 绘制蓝色闪烁块
 function drawHighlight(code) {
-  // 透明度随时间波动，闪烁明显
   const alpha = 0.3 + 0.3 * Math.sin(time * 0.2); 
   ctx.fillStyle = `rgba(0, 0, 255, ${alpha})`;
   ctx.beginPath();
@@ -97,16 +96,15 @@ function drawHighlight(code) {
   ctx.fill();
 }
 
-// 绘制二维码文字，显示在二维码中间
+// 绘制二维码文字，显示在二维码中心
 function drawText(code, isMatch=false) {
-  // 计算二维码中心点
   const centerX = (code.location.topLeftCorner.x + code.location.topRightCorner.x + code.location.bottomRightCorner.x + code.location.bottomLeftCorner.x) / 4;
   const centerY = (code.location.topLeftCorner.y + code.location.topRightCorner.y + code.location.bottomRightCorner.y + code.location.bottomLeftCorner.y) / 4;
 
   ctx.font = "bold 18px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = isMatch ? 'white' : 'gray'; // 匹配文字白色，高对比
+  ctx.fillStyle = isMatch ? 'red' : 'yellow'; // 红色选中，黄色非选中
   ctx.fillText(code.data, centerX, centerY);
 }
 
