@@ -24,7 +24,6 @@
   <canvas id="overlay"></canvas>
 </div>
 
-<!-- jsQR 库 -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
 const video = document.getElementById('video');
@@ -53,7 +52,7 @@ function drawBoundingBox(code) {
   ctx.stroke();
 }
 
-// 显示二维码内容（不框住）
+// 显示二维码内容
 function drawText(code) {
   const scaleX = canvas.clientWidth / canvas.width;
   const scaleY = canvas.clientHeight / canvas.height;
@@ -72,18 +71,18 @@ function scanFrame() {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-    // 清空之前高亮
+    // 清空画布
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (code) {
-      drawText(code); // 显示内容
+      drawText(code); // 所有二维码显示内容
       if (keyword && code.data.includes(keyword)) {
-        drawBoundingBox(code); // 匹配关键字才画红框
+        drawBoundingBox(code); // 匹配关键字红框
       }
     }
   }
 
-  setTimeout(scanFrame, 200); // 每200ms扫描一次
+  setTimeout(scanFrame, 200);
 }
 
 // 启动摄像头
@@ -110,7 +109,7 @@ async function startCamera() {
   }
 }
 
-// 点击按钮或回车开始扫描
+// 点击按钮或回车直接启动摄像头扫描
 startBtn.addEventListener('click', startCamera);
 keywordInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') startCamera();
