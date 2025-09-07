@@ -16,7 +16,7 @@
 <input type="text" id="keyword" placeholder="输入试剂编号关键字" />
 <button id="startBtn">开始扫描</button>
 <div id="container">
-  <video id="video" autoplay></video>
+  <video id="video" autoplay muted playsinline></video>
   <canvas id="overlay"></canvas>
 </div>
 
@@ -33,33 +33,37 @@ let keyword = '';
 let streamStarted = false;
 let scanning = false;
 
-// 通过 canvas 获取视频帧
+// 扫描视频帧
 function scanFrame() {
   if (!scanning) return;
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-  if (code) {
-    const text = code.data;
-    if (keyword && text.includes(keyword)) {
-      // 高亮二维码
-      ctx.strokeStyle = 'red';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(code.location.topLeftCorner.x, code.location.topLeftCorner.y);
-      ctx.lineTo(code.location.topRightCorner.x, code.location.topRightCorner.y);
-      ctx.lineTo(code.location.bottomRightCorner.x, code.location.bottomRightCorner.y);
-      ctx.lineTo(code.location.bottomLeftCorner.x, code.location.bottomLeftCorner.y);
-      ctx.closePath();
-      ctx.stroke();
+    // 清空之前高亮
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 显示内容
-      ctx.font = "20px sans-serif";
-      ctx.fillStyle = 'red';
-      ctx.fillText(text, code.location.topLeftCorner.x, Math.max(code.location.topLeftCorner.y - 5, 20));
+    if (code) {
+      const text = code.data;
+      if (keyword && text.includes(keyword)) {
+        // 高亮二维码
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(code.location.topLeftCorner.x, code.location.topLeftCorner.y);
+        ctx.lineTo(code.location.topRightCorner.x, code.location.topRightCorner.y);
+        ctx.lineTo(code.location.bottomRightCorner.x, code.location.bottomRightCorner.y);
+        ctx.lineTo(code.location.bottomLeftCorner.x, code.location.bottomLeftCorner.y);
+        ctx.closePath();
+        ctx.stroke();
+
+        // 显示内容
+        ctx.font = "20px sans-serif";
+        ctx.fillStyle = 'red';
+        ctx.fillText(text, code.location.topLeftCorner.x, Math.max(code.location.topLeftCorner.y - 5, 20));
+      }
     }
   }
 
@@ -86,9 +90,13 @@ startBtn.addEventListener('click', async () => {
       return;
     }
   } else {
-    // 已经启动摄像头，只更新关键字
     scanning = true;
   }
+});
+
+// 支持按回车开始扫描
+keywordInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') startBtn.click();
 });
 </script>
 </body>
