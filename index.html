@@ -5,54 +5,59 @@
 <title>试剂二维码实时扫描</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    text-align: center;
-    margin: 0;
-    padding: 20px;
-    background: #f8f9fa;
+  body { 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+    text-align: center; 
+    margin: 0; 
+    padding: 20px; 
+    background: #f8f9fa; 
   }
-  h2 { color: #333; margin-bottom: 10px; }
+  h2 { color: #333; margin-bottom: 15px; }
   #controls {
     display: flex;
-    flex-direction: column;
+    justify-content: center;
     align-items: center;
-    margin-bottom: 10px;
+    gap: 10px;
+    margin-bottom: 15px;
   }
-  input, button {
+  #keyword {
     font-size: 18px;
     padding: 12px;
-    margin: 5px 0;
-    width: 90%;
+    flex: 1;
     max-width: 400px;
     border-radius: 8px;
     border: 1px solid #ccc;
     box-sizing: border-box;
   }
-  button {
+  #startBtn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
     background-color: #007bff;
     color: white;
     border: none;
+    font-size: 16px;
+    cursor: pointer;
   }
-  button:active {
+  #startBtn:active {
     background-color: #0056b3;
   }
-  #container {
-    position: relative;
-    display: inline-block;
-    width: 100%;
-    max-width: 600px;
+  #container { 
+    position: relative; 
+    display: inline-block; 
+    width: 100%; 
+    max-width: 600px; 
   }
-  video, canvas {
-    width: 100%;
-    height: auto;
-    border-radius: 12px;
-    background: #000;
+  video, canvas { 
+    width: 100%; 
+    height: auto; 
+    border-radius: 12px; 
+    background: #000; 
   }
-  canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
+  canvas { 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
   }
 </style>
 </head>
@@ -60,7 +65,7 @@
 <h2>试剂二维码实时扫描</h2>
 <div id="controls">
   <input type="text" id="keyword" placeholder="输入试剂编号关键字" />
-  <button id="startBtn">开始扫描</button>
+  <button id="startBtn">scann</button>
 </div>
 <div id="container">
   <video id="video" autoplay muted playsinline></video>
@@ -78,7 +83,6 @@ const keywordInput = document.getElementById('keyword');
 let keyword = '';
 let scanning = false;
 
-// 绘制红框
 function drawBoundingBox(code) {
   const scaleX = canvas.clientWidth / canvas.width;
   const scaleY = canvas.clientHeight / canvas.height;
@@ -94,7 +98,6 @@ function drawBoundingBox(code) {
   ctx.stroke();
 }
 
-// 显示二维码内容
 function drawText(code, isMatch=false) {
   const scaleX = canvas.clientWidth / canvas.width;
   const scaleY = canvas.clientHeight / canvas.height;
@@ -104,7 +107,6 @@ function drawText(code, isMatch=false) {
   ctx.fillText(code.data, code.location.topLeftCorner.x * scaleX, Math.max(code.location.topLeftCorner.y * scaleY - 5, 20));
 }
 
-// 扫描视频帧
 function scanFrame() {
   if (!scanning) return;
 
@@ -125,7 +127,6 @@ function scanFrame() {
   requestAnimationFrame(scanFrame);
 }
 
-// 启动摄像头
 async function startCamera() {
   keyword = keywordInput.value.trim();
 
