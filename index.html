@@ -83,6 +83,7 @@ let keyword = '';
 let streamStarted = false;
 let scanning = false;
 
+// 绘制红框
 function drawBoundingBox(code) {
   const scaleX = canvas.clientWidth / canvas.width;
   const scaleY = canvas.clientHeight / canvas.height;
@@ -98,6 +99,7 @@ function drawBoundingBox(code) {
   ctx.stroke();
 }
 
+// 显示二维码内容
 function drawText(code, isMatch=false) {
   const scaleX = canvas.clientWidth / canvas.width;
   const scaleY = canvas.clientHeight / canvas.height;
@@ -107,6 +109,7 @@ function drawText(code, isMatch=false) {
   ctx.fillText(code.data, code.location.topLeftCorner.x * scaleX, Math.max(code.location.topLeftCorner.y * scaleY - 5, 20));
 }
 
+// 扫描视频帧
 function scanFrame() {
   if (!scanning) return;
 
@@ -124,9 +127,10 @@ function scanFrame() {
     }
   }
 
-  setTimeout(scanFrame, 200);
+  requestAnimationFrame(scanFrame); // 更平滑的循环
 }
 
+// 启动摄像头
 async function startCamera() {
   keyword = keywordInput.value.trim();
 
@@ -134,12 +138,11 @@ async function startCamera() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       video.srcObject = stream;
-      video.addEventListener('loadedmetadata', () => {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        scanning = true;
-        scanFrame();
-      });
+      await video.play(); // 确保视频播放
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      scanning = true;
+      scanFrame();
       streamStarted = true;
     } catch (e) {
       alert('无法访问摄像头，请检查权限');
@@ -150,6 +153,7 @@ async function startCamera() {
   }
 }
 
+// 点击按钮或回车启动摄像头
 startBtn.addEventListener('click', startCamera);
 keywordInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') startCamera();
