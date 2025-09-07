@@ -6,7 +6,11 @@
 <style>
   body { font-family: sans-serif; text-align: center; margin: 0; padding: 0; background: #f0f0f0; }
   #container { position: relative; display: inline-block; margin-top: 10px; }
-  video { width: 100vw; max-width: 600px; }
+  video, canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
   canvas { position: absolute; top: 0; left: 0; }
   input, button { margin: 5px; font-size: 16px; padding: 5px; }
 </style>
@@ -33,6 +37,32 @@ let keyword = '';
 let streamStarted = false;
 let scanning = false;
 
+// 绘制红框
+function drawBoundingBox(code) {
+  const scaleX = canvas.clientWidth / canvas.width;
+  const scaleY = canvas.clientHeight / canvas.height;
+
+  ctx.strokeStyle = 'red';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(code.location.topLeftCorner.x * scaleX, code.location.topLeftCorner.y * scaleY);
+  ctx.lineTo(code.location.topRightCorner.x * scaleX, code.location.topRightCorner.y * scaleY);
+  ctx.lineTo(code.location.bottomRightCorner.x * scaleX, code.location.bottomRightCorner.y * scaleY);
+  ctx.lineTo(code.location.bottomLeftCorner.x * scaleX, code.location.bottomLeftCorner.y * scaleY);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+// 显示二维码内容（不框住）
+function drawText(code) {
+  const scaleX = canvas.clientWidth / canvas.width;
+  const scaleY = canvas.clientHeight / canvas.height;
+
+  ctx.font = "20px sans-serif";
+  ctx.fillStyle = 'blue';
+  ctx.fillText(code.data, code.location.topLeftCorner.x * scaleX, Math.max(code.location.topLeftCorner.y * scaleY - 5, 20));
+}
+
 // 扫描视频帧
 function scanFrame() {
   if (!scanning) return;
@@ -46,23 +76,9 @@ function scanFrame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (code) {
-      const text = code.data;
-      if (keyword && text.includes(keyword)) {
-        // 高亮二维码
-        ctx.strokeStyle = 'red';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(code.location.topLeftCorner.x, code.location.topLeftCorner.y);
-        ctx.lineTo(code.location.topRightCorner.x, code.location.topRightCorner.y);
-        ctx.lineTo(code.location.bottomRightCorner.x, code.location.bottomRightCorner.y);
-        ctx.lineTo(code.location.bottomLeftCorner.x, code.location.bottomLeftCorner.y);
-        ctx.closePath();
-        ctx.stroke();
-
-        // 显示内容
-        ctx.font = "20px sans-serif";
-        ctx.fillStyle = 'red';
-        ctx.fillText(text, code.location.topLeftCorner.x, Math.max(code.location.topLeftCorner.y - 5, 20));
+      drawText(code); // 显示内容
+      if (keyword && code.data.includes(keyword)) {
+        drawBoundingBox(code); // 匹配关键字才画红框
       }
     }
   }
@@ -70,9 +86,9 @@ function scanFrame() {
   setTimeout(scanFrame, 200); // 每200ms扫描一次
 }
 
-startBtn.addEventListener('click', async () => {
+// 启动摄像头
+async function startCamera() {
   keyword = keywordInput.value.trim();
-  if (!keyword) { alert('请输入关键字'); keywordInput.focus(); return; }
 
   if (!streamStarted) {
     try {
@@ -92,11 +108,12 @@ startBtn.addEventListener('click', async () => {
   } else {
     scanning = true;
   }
-});
+}
 
-// 支持按回车开始扫描
+// 点击按钮或回车开始扫描
+startBtn.addEventListener('click', startCamera);
 keywordInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') startBtn.click();
+  if (e.key === 'Enter') startCamera();
 });
 </script>
 </body>
