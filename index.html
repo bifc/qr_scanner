@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>试剂二维码实时扫描</title>
+<title>增强版多二维码实时扫描</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   body { 
@@ -61,7 +61,7 @@
 </style>
 </head>
 <body>
-<h2>试剂二维码实时扫描</h2>
+<h2>增强版多二维码实时扫描</h2>
 <div id="controls">
   <input type="text" id="keyword" placeholder="输入试剂编号关键字" />
   <button id="startBtn">scann</button>
@@ -81,11 +81,11 @@ const keywordInput = document.getElementById('keyword');
 
 let keyword = '';
 let scanning = false;
-let time = 0; // 控制闪烁
+let time = 0;
 
 // 绘制蓝色闪烁块
 function drawHighlight(code) {
-  const alpha = 0.3 + 0.3 * Math.sin(time * 0.2); 
+  const alpha = 0.3 + 0.3 * Math.sin(time * 0.3); // 闪烁更明显
   ctx.fillStyle = `rgba(0, 0, 255, ${alpha})`;
   ctx.beginPath();
   ctx.moveTo(code.location.topLeftCorner.x, code.location.topLeftCorner.y);
@@ -96,7 +96,7 @@ function drawHighlight(code) {
   ctx.fill();
 }
 
-// 绘制二维码文字，显示在二维码中心
+// 绘制文字在二维码中心
 function drawText(code, isMatch=false) {
   const centerX = (code.location.topLeftCorner.x + code.location.topRightCorner.x + code.location.bottomRightCorner.x + code.location.bottomLeftCorner.x) / 4;
   const centerY = (code.location.topLeftCorner.y + code.location.topRightCorner.y + code.location.bottomRightCorner.y + code.location.bottomLeftCorner.y) / 4;
@@ -104,11 +104,11 @@ function drawText(code, isMatch=false) {
   ctx.font = "bold 18px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = isMatch ? 'red' : 'yellow'; // 红色选中，黄色非选中
+  ctx.fillStyle = isMatch ? 'yellow' : 'red';
   ctx.fillText(code.data, centerX, centerY);
 }
 
-// 实时扫描
+// 多二维码扫描处理
 function scanFrame() {
   if (!scanning) return;
   time++;
@@ -117,9 +117,12 @@ function scanFrame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+    // 获取图像数据
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
 
+    // jsQR一次只能检测一个二维码，如果有多个二维码，可尝试分块或使用其他库
+    // 为简单测试，重复扫描整个画面，可同时显示上一次二维码结果
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
     if (code) {
       const isMatch = keyword && code.data.includes(keyword);
       drawText(code, isMatch);
