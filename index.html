@@ -3,22 +3,69 @@
 <head>
 <meta charset="UTF-8">
 <title>试剂二维码扫描</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body { font-family: sans-serif; text-align: center; margin: 0; padding: 0; background: #f0f0f0; }
-  #container { position: relative; display: inline-block; margin-top: 10px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+    background: #f8f9fa;
+  }
+  h2 {
+    margin: 15px 0;
+    color: #333;
+  }
+  #controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 10px;
+  }
+  input, button {
+    font-size: 18px;
+    padding: 12px;
+    margin: 8px 0;
+    width: 100%;
+    max-width: 400px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+  }
+  button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+  }
+  button:active {
+    background-color: #0056b3;
+  }
+  #container {
+    position: relative;
+    display: inline-block;
+    margin-top: 10px;
+    width: 100%;
+    max-width: 600px;
+  }
   video, canvas {
-    display: block;
     width: 100%;
     height: auto;
+    border-radius: 12px;
+    background: #000;
   }
-  canvas { position: absolute; top: 0; left: 0; }
-  input, button { margin: 5px; font-size: 16px; padding: 5px; }
+  canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
 </style>
 </head>
 <body>
 <h2>试剂二维码扫描</h2>
-<input type="text" id="keyword" placeholder="输入试剂编号关键字" />
-<button id="startBtn">开始扫描</button>
+<div id="controls">
+  <input type="text" id="keyword" placeholder="输入试剂编号关键字" />
+  <button id="startBtn">开始扫描</button>
+</div>
 <div id="container">
   <video id="video" autoplay muted playsinline></video>
   <canvas id="overlay"></canvas>
@@ -36,7 +83,6 @@ let keyword = '';
 let streamStarted = false;
 let scanning = false;
 
-// 绘制红框
 function drawBoundingBox(code) {
   const scaleX = canvas.clientWidth / canvas.width;
   const scaleY = canvas.clientHeight / canvas.height;
@@ -52,17 +98,15 @@ function drawBoundingBox(code) {
   ctx.stroke();
 }
 
-// 显示二维码内容
-function drawText(code) {
+function drawText(code, isMatch=false) {
   const scaleX = canvas.clientWidth / canvas.width;
   const scaleY = canvas.clientHeight / canvas.height;
 
-  ctx.font = "20px sans-serif";
-  ctx.fillStyle = 'blue';
+  ctx.font = "18px sans-serif";
+  ctx.fillStyle = isMatch ? 'red' : 'blue';
   ctx.fillText(code.data, code.location.topLeftCorner.x * scaleX, Math.max(code.location.topLeftCorner.y * scaleY - 5, 20));
 }
 
-// 扫描视频帧
 function scanFrame() {
   if (!scanning) return;
 
@@ -71,21 +115,18 @@ function scanFrame() {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-    // 清空画布
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (code) {
-      drawText(code); // 所有二维码显示内容
-      if (keyword && code.data.includes(keyword)) {
-        drawBoundingBox(code); // 匹配关键字红框
-      }
+      const isMatch = keyword && code.data.includes(keyword);
+      drawText(code, isMatch);
+      if (isMatch) drawBoundingBox(code);
     }
   }
 
   setTimeout(scanFrame, 200);
 }
 
-// 启动摄像头
 async function startCamera() {
   keyword = keywordInput.value.trim();
 
@@ -109,7 +150,6 @@ async function startCamera() {
   }
 }
 
-// 点击按钮或回车直接启动摄像头扫描
 startBtn.addEventListener('click', startCamera);
 keywordInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') startCamera();
