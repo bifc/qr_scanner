@@ -81,12 +81,13 @@ const keywordInput = document.getElementById('keyword');
 
 let keyword = '';
 let scanning = false;
-let alphaToggle = false; // 控制闪烁
+let time = 0; // 用于控制闪烁
 
-// 绘制蓝色半透明方块（闪烁）
+// 绘制蓝色闪烁块
 function drawHighlight(code) {
-  alphaToggle = !alphaToggle;
-  ctx.fillStyle = `rgba(0, 0, 255, ${alphaToggle ? 0.6 : 0.3})`;
+  // 透明度随时间波动，闪烁明显
+  const alpha = 0.3 + 0.3 * Math.sin(time * 0.2); 
+  ctx.fillStyle = `rgba(0, 0, 255, ${alpha})`;
   ctx.beginPath();
   ctx.moveTo(code.location.topLeftCorner.x, code.location.topLeftCorner.y);
   ctx.lineTo(code.location.topRightCorner.x, code.location.topRightCorner.y);
@@ -96,16 +97,23 @@ function drawHighlight(code) {
   ctx.fill();
 }
 
-// 绘制二维码文字
+// 绘制二维码文字，显示在二维码中间
 function drawText(code, isMatch=false) {
-  ctx.font = "18px sans-serif";
-  ctx.fillStyle = isMatch ? 'blue' : 'gray';
-  ctx.fillText(code.data, code.location.topLeftCorner.x, Math.max(code.location.topLeftCorner.y - 5, 20));
+  // 计算二维码中心点
+  const centerX = (code.location.topLeftCorner.x + code.location.topRightCorner.x + code.location.bottomRightCorner.x + code.location.bottomLeftCorner.x) / 4;
+  const centerY = (code.location.topLeftCorner.y + code.location.topRightCorner.y + code.location.bottomRightCorner.y + code.location.bottomLeftCorner.y) / 4;
+
+  ctx.font = "bold 18px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = isMatch ? 'white' : 'gray'; // 匹配文字白色，高对比
+  ctx.fillText(code.data, centerX, centerY);
 }
 
-// 实时扫描视频帧
+// 实时扫描
 function scanFrame() {
   if (!scanning) return;
+  time++;
 
   if (video.readyState === video.HAVE_ENOUGH_DATA) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
