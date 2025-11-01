@@ -2,20 +2,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>多二维码扫描（二维码中显示内容）</title>
+<title>多二维码扫描（边框+内容）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: #f4f6f9;
-    text-align: center;
-    padding: 20px;
-  }
-  h2 { color: #333; }
-  #controls { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 15px; }
-  input { padding: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; width: 220px; }
-  button { background: #007bff; color: #fff; border: none; padding: 10px 18px; border-radius: 8px; font-size: 16px; cursor: pointer; }
-  button:hover { background: #0056b3; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: #f4f6f9; padding: 20px; }
   #container { position: relative; display: inline-block; }
   #video { width: 100%; max-width: 600px; border-radius: 12px; background: #000; }
   #overlay { position: absolute; top: 0; left: 0; width: 100%; max-width: 600px; border-radius: 12px; pointer-events: none; }
@@ -23,12 +13,7 @@
 </head>
 <body>
 
-<h2>多二维码扫描（二维码中显示内容）</h2>
-<div id="controls">
-  <input type="text" id="keyword" placeholder="输入关键字过滤（可选）" />
-  <button id="startBtn">Start Scan</button>
-</div>
-
+<h2>多二维码扫描（边框+内容）</h2>
 <div id="container">
   <video id="video" autoplay muted playsinline></video>
   <canvas id="overlay"></canvas>
@@ -39,66 +24,60 @@
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
-const keywordInput = document.getElementById('keyword');
-const startBtn = document.getElementById('startBtn');
 
-let scanning = false;
+let qrScanner;
+let codes = []; // 保存已识别二维码及位置
 
-startBtn.addEventListener('click', async () => {
-  if (scanning) return;
-  scanning = true;
+async function startScanner() {
+    qrScanner = new QrScanner(video, result => {
+        const existing = codes.find(c => c.data === result.data);
+        if (!existing) {
+            codes.push({ data: result.data, cornerPoints: result.cornerPoints });
+            console.log("识别到二维码:", result.data);
+        }
+    }, { highlightScanRegion: false, highlightCodeOutline: false });
 
-  const qrScanner = new QrScanner(video, result => {
-    // 可选：你可以保存 result 用于列表显示或去重
-  }, { highlightScanRegion: false, highlightCodeOutline: false }); // 我们自己绘制
-
-  try {
     await qrScanner.start({ video: { facingMode: "environment", width: 1280, height: 720 } });
-    animateOverlay();
-  } catch (e) {
-    alert("无法访问摄像头：" + e);
-    scanning = false;
-  }
 
-  function animateOverlay() {
+    animate();
+}
+
+function animate() {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const keyword = keywordInput.value.trim();
-    const codes = qrScanner._qrEngine?.scannedCodes || [];
+    const t = Date.now() / 300;
 
     codes.forEach(code => {
-      const points = code.location?.cornerPoints;
-      if (!points || points.length !== 4) return;
+        const points = code.cornerPoints;
+        if (!points) return;
 
-      // 绘制边框
-      const t = Date.now() / 300;
-      ctx.strokeStyle = keyword && code.data.includes(keyword) 
-                       ? `rgba(255,255,0,${0.5 + 0.5*Math.sin(t)})`
-                       : `rgba(0,255,0,${0.5 + 0.5*Math.sin(t)})`;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
-      ctx.closePath();
-      ctx.stroke();
+        // 边框闪烁
+        ctx.strokeStyle = `rgba(0,255,0,${0.5 + 0.5*Math.sin(t)})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i=1; i<points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+        ctx.closePath();
+        ctx.stroke();
 
-      // 计算中心点
-      const cx = (points[0].x + points[1].x + points[2].x + points[3].x) / 4;
-      const cy = (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
+        // 计算二维码中心
+        const cx = (points[0].x + points[1].x + points[2].x + points[3].x) / 4;
+        const cy = (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
 
-      // 在二维码中心显示内容
-      ctx.fillStyle = 'yellow';
-      ctx.font = '18px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(code.data, cx, cy);
+        // 在中心显示二维码内容
+        ctx.fillStyle = 'yellow';
+        ctx.font = '16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(code.data, cx, cy);
     });
 
-    requestAnimationFrame(animateOverlay);
-  }
-});
+    requestAnimationFrame(animate);
+}
+
+startScanner();
 </script>
 
 </body>
