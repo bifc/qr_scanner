@@ -2,15 +2,15 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>增强版多二维码实时扫描</title>
+<title>多二维码实时扫描（基于ZXing WASM）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   body { 
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-    text-align: center; 
-    margin: 0; 
-    padding: 20px; 
-    background: #f8f9fa; 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    text-align: center;
+    background: #f8f9fa;
+    margin: 0;
+    padding: 20px;
   }
   h2 { color: #333; margin-bottom: 15px; }
   #controls {
@@ -22,12 +22,11 @@
   }
   #keyword {
     font-size: 18px;
-    padding: 12px;
+    padding: 10px;
     flex: 1;
     max-width: 400px;
     border-radius: 8px;
     border: 1px solid #ccc;
-    box-sizing: border-box;
   }
   #startBtn {
     width: 60px;
@@ -40,103 +39,44 @@
     cursor: pointer;
   }
   #startBtn:active { background-color: #0056b3; }
-  #container { 
-    position: relative; 
-    display: inline-block; 
-    width: 100%; 
-    max-width: 600px; 
-  }
-  video, canvas { 
-    width: 100%; 
-    height: auto; 
-    border-radius: 12px; 
-    background: #000; 
-    display: block;
-  }
-  canvas { 
-    position: absolute; 
-    top: 0; 
-    left: 0; 
-  }
+  #container { position: relative; display: inline-block; width: 100%; max-width: 640px; }
+  video, canvas { width: 100%; height: auto; border-radius: 12px; background: #000; display: block; }
+  canvas { position: absolute; top: 0; left: 0; }
 </style>
 </head>
 <body>
-<h2>增强版多二维码实时扫描</h2>
+<h2>多二维码实时扫描（ZXing WASM版）</h2>
 <div id="controls">
-  <input type="text" id="keyword" placeholder="输入试剂编号关键字" />
-  <button id="startBtn">scann</button>
+  <input type="text" id="keyword" placeholder="输入关键字过滤结果" />
+  <button id="startBtn">Scan</button>
 </div>
+
 <div id="container">
   <video id="video" autoplay muted playsinline></video>
   <canvas id="overlay"></canvas>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script>
+<!-- ZXing WASM 多二维码识别 -->
+<script type="module">
+import { ZXingWASM } from "https://cdn.jsdelivr.net/npm/@sec-ant/zxing-wasm@2.2.3/+esm";
+
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
 const startBtn = document.getElementById('startBtn');
 const keywordInput = document.getElementById('keyword');
 
-let keyword = '';
 let scanning = false;
-let time = 0;
+let keyword = '';
+let zxing;
 
-// 绘制蓝色闪烁块
-function drawHighlight(code) {
-  const alpha = 0.3 + 0.3 * Math.sin(time * 0.3); // 闪烁更明显
-  ctx.fillStyle = `rgba(0, 0, 255, ${alpha})`;
-  ctx.beginPath();
-  ctx.moveTo(code.location.topLeftCorner.x, code.location.topLeftCorner.y);
-  ctx.lineTo(code.location.topRightCorner.x, code.location.topRightCorner.y);
-  ctx.lineTo(code.location.bottomRightCorner.x, code.location.bottomRightCorner.y);
-  ctx.lineTo(code.location.bottomLeftCorner.x, code.location.bottomLeftCorner.y);
-  ctx.closePath();
-  ctx.fill();
-}
+// 初始化 ZXing WASM
+(async () => {
+  zxing = await ZXingWASM();
+})();
 
-// 绘制文字在二维码中心
-function drawText(code, isMatch=false) {
-  const centerX = (code.location.topLeftCorner.x + code.location.topRightCorner.x + code.location.bottomRightCorner.x + code.location.bottomLeftCorner.x) / 4;
-  const centerY = (code.location.topLeftCorner.y + code.location.topRightCorner.y + code.location.bottomRightCorner.y + code.location.bottomLeftCorner.y) / 4;
-
-  ctx.font = "bold 18px sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = isMatch ? 'yellow' : 'red';
-  ctx.fillText(code.data, centerX, centerY);
-}
-
-// 多二维码扫描处理
-function scanFrame() {
-  if (!scanning) return;
-  time++;
-
-  if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // 获取图像数据
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-    // jsQR一次只能检测一个二维码，如果有多个二维码，可尝试分块或使用其他库
-    // 为简单测试，重复扫描整个画面，可同时显示上一次二维码结果
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
-    if (code) {
-      const isMatch = keyword && code.data.includes(keyword);
-      drawText(code, isMatch);
-      if (isMatch) drawHighlight(code);
-    }
-  }
-
-  requestAnimationFrame(scanFrame);
-}
-
-// 启动摄像头
 async function startCamera() {
   keyword = keywordInput.value.trim();
-
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
     video.srcObject = stream;
@@ -144,18 +84,52 @@ async function startCamera() {
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-
     scanning = true;
-    scanFrame();
-  } catch (e) {
-    alert('无法访问摄像头，请检查权限');
+    scanLoop();
+  } catch (err) {
+    alert("无法访问摄像头，请检查权限。");
   }
 }
 
+async function scanLoop() {
+  if (!scanning) return;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  // 调用 ZXing 的多二维码检测
+  const results = await zxing.scanQRCodes(imageData.data, imageData.width, imageData.height);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (const code of results) {
+    const text = code.text;
+    const isMatch = keyword && text.includes(keyword);
+    const color = isMatch ? 'yellow' : 'red';
+
+    // 绘制检测框
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    const points = code.cornerPoints;
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.closePath();
+    ctx.stroke();
+
+    // 显示文本
+    const cx = points.reduce((a, p) => a + p.x, 0) / points.length;
+    const cy = points.reduce((a, p) => a + p.y, 0) / points.length;
+    ctx.fillStyle = color;
+    ctx.font = "bold 16px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(text, cx, cy);
+  }
+
+  requestAnimationFrame(scanLoop);
+}
+
 startBtn.addEventListener('click', startCamera);
-keywordInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') startCamera();
-});
+keywordInput.addEventListener('keypress', e => { if (e.key === 'Enter') startCamera(); });
 </script>
 </body>
 </html>
