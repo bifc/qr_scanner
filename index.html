@@ -1,6 +1,163 @@
-<video autoplay muted playsinline style="width:300px;"></video>
-<script>
-  navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => document.querySelector('video').srcObject = stream)
-    .catch(err => alert("无法访问摄像头: " + err));
-</script>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>多二维码扫描（最终版 UMD）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f4f6f9;
+    text-align: center;
+    padding: 20px;
+  }
+  h2 { color: #333; }
+  #controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+  }
+  input {
+    padding: 10px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    width: 220px;
+  }
+  button {
+    background: #007bff;
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  button:hover { background: #0056b3; }
+  #container {
+    position: relative;
+    display: inline-block;
+  }
+  #video {
+    width: 100%;
+    max-width: 600px;
+    border-radius: 12px;
+    background: #000;
+  }
+  #overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: 600px;
+    border-radius: 12px;
+  }
+  #output {
+    margin-top: 15px;
+    background: #fff;
+    padding: 10px;
+    border-radius: 8px;
+    display: inline-block;
+    text-align: left;
+    max-width: 600px;
+    word-break: break-word;
+  }
+</style>
+</head>
+<body>
+  <h2>多二维码扫描（最终版）</h2>
+  <div id="controls">
+    <input type="text" id="keyword" placeholder="输入关键字过滤（可选）" />
+    <button id="startBtn">Start Scan</button>
+  </div>
+
+  <div id="container">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <div id="output"><b>识别结果：</b><br><span id="resultArea">暂无</span></div>
+
+  <!-- ZXing UMD 版 -->
+  <script src="https://unpkg.com/@zxing/browser@latest/dist/index.umd.min.js"></script>
+
+  <script>
+    const startBtn = document.getElementById('startBtn');
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const ctx = overlay.getContext('2d');
+    const resultArea = document.getElementById('resultArea');
+    const keywordInput = document.getElementById('keyword');
+
+    let scanning = false;
+    let foundCodes = new Set();
+    let codeReader;
+    let animationFrame;
+    let time = 0;
+
+    startBtn.addEventListener('click', async () => {
+      if (scanning) return;
+      scanning = true;
+      resultArea.innerText = "正在启动摄像头...";
+      foundCodes.clear();
+
+      codeReader = new ZXing.BrowserMultiFormatReader();
+
+      try {
+        // 获取摄像头设备
+        const devices = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
+        if (devices.length === 0) {
+          resultArea.innerText = "未找到摄像头";
+          scanning = false;
+          return;
+        }
+
+        const selectedDeviceId = devices[0].deviceId;
+        const keyword = keywordInput.value.trim();
+
+        resultArea.innerText = "正在扫描，请将二维码放入摄像头视野中...";
+
+        // 开始扫描视频
+        codeReader.decodeFromVideoDevice(selectedDeviceId, video, (result, err) => {
+          if (result) {
+            const text = result.getText();
+            if (!foundCodes.has(text)) {
+              if (!keyword || text.includes(keyword)) {
+                foundCodes.add(text);
+                resultArea.innerHTML += `<br>✅ ${text}`;
+              }
+            }
+          }
+          if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.error(err);
+          }
+        });
+
+        // 高亮绘制（简化版）
+        function animateHighlight() {
+          ctx.clearRect(0, 0, overlay.width, overlay.height);
+          overlay.width = video.videoWidth;
+          overlay.height = video.videoHeight;
+          time += 0.1;
+
+          // UMD ZXing 目前不提供多码位置，所以这里只做闪烁效果
+          ctx.strokeStyle = `rgba(0,255,0,${0.3 + 0.3 * Math.sin(time * 3)})`;
+          ctx.lineWidth = 4;
+          ctx.strokeRect(20, 20, overlay.width-40, overlay.height-40);
+
+          animationFrame = requestAnimationFrame(animateHighlight);
+        }
+
+        animateHighlight();
+
+      } catch (e) {
+        console.error(e);
+        resultArea.innerText = "无法访问摄像头：" + e;
+        scanning = false;
+      }
+    });
+  </script>
+</body>
+</html>
