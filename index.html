@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>多二维码扫描（搜索+实时显示）</title>
+<title>多二维码扫描（实时清理+搜索）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: #f4f6f9; padding: 20px; }
@@ -17,7 +17,7 @@
 </head>
 <body>
 
-<h2>多二维码扫描（搜索+实时显示）</h2>
+<h2>多二维码扫描（实时清理+搜索）</h2>
 <div id="controls">
   <input type="text" id="keyword" placeholder="输入关键字过滤（可选）" />
   <button id="startBtn">Start Scan</button>
@@ -37,21 +37,21 @@ const keywordInput = document.getElementById('keyword');
 const startBtn = document.getElementById('startBtn');
 
 let qrScanner;
-let codes = []; // 保存二维码内容和位置
+let codes = []; // 当前帧二维码内容
 let scanning = false;
 
 startBtn.addEventListener('click', async () => {
     if (scanning) return;
     scanning = true;
-    codes = [];
 
     qrScanner = new QrScanner(video, result => {
-        const existing = codes.find(c => c.data === result.data);
-        if (existing) {
-            existing.cornerPoints = result.cornerPoints;
+        // 每帧扫描都会触发，这里只记录当前帧二维码
+        const idx = codes.findIndex(c => c.data === result.data);
+        if (idx >= 0) {
+            codes[idx].cornerPoints = result.cornerPoints;
+            codes[idx].timestamp = Date.now();
         } else {
-            codes.push({ data: result.data, cornerPoints: result.cornerPoints });
-            console.log("识别到二维码:", result.data);
+            codes.push({ data: result.data, cornerPoints: result.cornerPoints, timestamp: Date.now() });
         }
     }, { highlightScanRegion: false, highlightCodeOutline: false });
 
@@ -70,15 +70,19 @@ function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const t = Date.now() / 300;
+    const now = Date.now();
     const keyword = keywordInput.value.trim();
+
+    // 清除超过 500ms 没检测到的二维码
+    codes = codes.filter(c => now - c.timestamp < 500);
 
     codes.forEach(code => {
         const points = code.cornerPoints;
         if (!points) return;
 
-        // 根据关键字高亮
+        // 边框颜色高亮
         const match = keyword && code.data.includes(keyword);
-        ctx.strokeStyle = match ? `rgba(255,255,0,${0.5 + 0.5*Math.sin(t)})` 
+        ctx.strokeStyle = match ? `rgba(255,255,0,${0.5 + 0.5*Math.sin(t)})`
                                 : `rgba(0,255,0,${0.5 + 0.5*Math.sin(t)})`;
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -87,7 +91,7 @@ function animate() {
         ctx.closePath();
         ctx.stroke();
 
-        // 中心显示二维码内容
+        // 中心显示内容
         const cx = (points[0].x + points[1].x + points[2].x + points[3].x) / 4;
         const cy = (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
 
