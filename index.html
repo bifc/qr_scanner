@@ -2,17 +2,16 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>多二维码实时扫描（基于ZXing WASM）</title>
+<title>多二维码扫描（高亮版 ZXing）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body { 
+  body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f4f6f9;
     text-align: center;
-    background: #f8f9fa;
-    margin: 0;
     padding: 20px;
   }
-  h2 { color: #333; margin-bottom: 15px; }
+  h2 { color: #333; }
   #controls {
     display: flex;
     justify-content: center;
@@ -20,116 +19,158 @@
     gap: 10px;
     margin-bottom: 15px;
   }
-  #keyword {
-    font-size: 18px;
+  input {
     padding: 10px;
-    flex: 1;
-    max-width: 400px;
+    font-size: 16px;
     border-radius: 8px;
     border: 1px solid #ccc;
+    width: 220px;
   }
-  #startBtn {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background-color: #007bff;
-    color: white;
+  button {
+    background: #007bff;
+    color: #fff;
     border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
     font-size: 16px;
     cursor: pointer;
   }
-  #startBtn:active { background-color: #0056b3; }
-  #container { position: relative; display: inline-block; width: 100%; max-width: 640px; }
-  video, canvas { width: 100%; height: auto; border-radius: 12px; background: #000; display: block; }
-  canvas { position: absolute; top: 0; left: 0; }
+  button:hover { background: #0056b3; }
+  #container {
+    position: relative;
+    display: inline-block;
+  }
+  #video {
+    width: 100%;
+    max-width: 600px;
+    border-radius: 12px;
+    background: #000;
+  }
+  #overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: 600px;
+    border-radius: 12px;
+  }
+  #output {
+    margin-top: 15px;
+    background: #fff;
+    padding: 10px;
+    border-radius: 8px;
+    display: inline-block;
+    text-align: left;
+    max-width: 600px;
+  }
 </style>
 </head>
 <body>
-<h2>多二维码实时扫描（ZXing WASM版）</h2>
-<div id="controls">
-  <input type="text" id="keyword" placeholder="输入关键字过滤结果" />
-  <button id="startBtn">Scan</button>
-</div>
+  <h2>多二维码扫描（高亮闪烁版）</h2>
+  <div id="controls">
+    <input type="text" id="keyword" placeholder="输入关键字过滤（可选）" />
+    <button id="startBtn">Start Scan</button>
+  </div>
 
-<div id="container">
-  <video id="video" autoplay muted playsinline></video>
-  <canvas id="overlay"></canvas>
-</div>
+  <div id="container">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+  </div>
 
-<!-- ZXing WASM 多二维码识别 -->
-<script type="module">
-import { ZXingWASM } from "https://cdn.jsdelivr.net/npm/@sec-ant/zxing-wasm@2.2.3/+esm";
+  <div id="output"><b>识别结果：</b><br><span id="resultArea">暂无</span></div>
 
-const video = document.getElementById('video');
-const canvas = document.getElementById('overlay');
-const ctx = canvas.getContext('2d');
-const startBtn = document.getElementById('startBtn');
-const keywordInput = document.getElementById('keyword');
+  <!-- ZXing 库 -->
+  <script src="https://unpkg.com/@zxing/browser@latest"></script>
+  <script src="https://unpkg.com/@zxing/library@latest"></script>
 
-let scanning = false;
-let keyword = '';
-let zxing;
+  <script>
+    const startBtn = document.getElementById('startBtn');
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const ctx = overlay.getContext('2d');
+    const resultArea = document.getElementById('resultArea');
+    const keywordInput = document.getElementById('keyword');
 
-// 初始化 ZXing WASM
-(async () => {
-  zxing = await ZXingWASM();
-})();
+    let scanning = false;
+    let foundCodes = new Set();
+    let codeReader;
+    let animationFrame;
+    let time = 0;
 
-async function startCamera() {
-  keyword = keywordInput.value.trim();
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-    video.srcObject = stream;
-    await video.play();
+    async function startScan() {
+      if (scanning) return;
+      scanning = true;
+      resultArea.innerText = "正在启动摄像头...";
+      foundCodes.clear();
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    scanning = true;
-    scanLoop();
-  } catch (err) {
-    alert("无法访问摄像头，请检查权限。");
-  }
-}
+      codeReader = new ZXing.BrowserMultiFormatReader();
 
-async function scanLoop() {
-  if (!scanning) return;
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      try {
+        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+        if (devices.length === 0) {
+          resultArea.innerText = "未找到摄像头";
+          scanning = false;
+          return;
+        }
 
-  // 调用 ZXing 的多二维码检测
-  const results = await zxing.scanQRCodes(imageData.data, imageData.width, imageData.height);
+        const selectedDeviceId = devices[0].deviceId;
+        const keyword = keywordInput.value.trim();
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+        resultArea.innerText = "正在扫描，请将多个二维码放入摄像头视野中...";
 
-  for (const code of results) {
-    const text = code.text;
-    const isMatch = keyword && text.includes(keyword);
-    const color = isMatch ? 'yellow' : 'red';
+        const controls = await codeReader.decodeFromVideoDevice(selectedDeviceId, video, (result, err) => {
+          if (result) {
+            const text = result.getText();
+            if (!foundCodes.has(text)) {
+              if (!keyword || text.includes(keyword)) {
+                foundCodes.add(text);
+                resultArea.innerHTML += `<br>✅ ${text}`;
+              }
+            }
+          }
+        });
 
-    // 绘制检测框
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    const points = code.cornerPoints;
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
-    ctx.closePath();
-    ctx.stroke();
+        // 绘制动态闪烁边框
+        function animateHighlight() {
+          ctx.clearRect(0, 0, overlay.width, overlay.height);
+          overlay.width = video.videoWidth;
+          overlay.height = video.videoHeight;
+          time += 0.1;
 
-    // 显示文本
-    const cx = points.reduce((a, p) => a + p.x, 0) / points.length;
-    const cy = points.reduce((a, p) => a + p.y, 0) / points.length;
-    ctx.fillStyle = color;
-    ctx.font = "bold 16px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(text, cx, cy);
-  }
+          const results = codeReader.lastResults;
+          if (results && results.length > 0) {
+            for (let res of results) {
+              if (!res.resultPoints) continue;
+              const points = res.resultPoints;
+              const isMatch = keyword && res.text && res.text.includes(keyword);
+              const color = isMatch
+                ? `rgba(255,255,0,${0.5 + 0.5 * Math.sin(time * 4)})`
+                : `rgba(0,255,0,${0.3 + 0.3 * Math.sin(time * 3)})`;
 
-  requestAnimationFrame(scanLoop);
-}
+              ctx.beginPath();
+              ctx.moveTo(points[0].x, points[0].y);
+              for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+              }
+              ctx.closePath();
+              ctx.lineWidth = 4;
+              ctx.strokeStyle = color;
+              ctx.stroke();
+            }
+          }
+          animationFrame = requestAnimationFrame(animateHighlight);
+        }
 
-startBtn.addEventListener('click', startCamera);
-keywordInput.addEventListener('keypress', e => { if (e.key === 'Enter') startCamera(); });
-</script>
+        animateHighlight();
+
+      } catch (e) {
+        console.error(e);
+        resultArea.innerText = "无法访问摄像头：" + e;
+        scanning = false;
+      }
+    }
+
+    startBtn.addEventListener('click', startScan);
+  </script>
 </body>
 </html>
