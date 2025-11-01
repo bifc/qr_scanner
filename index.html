@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>多二维码扫描（高亮版 ZXing）</title>
+<title>多二维码扫描（iPhone Safari 兼容版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   body {
@@ -79,11 +79,10 @@
 
   <div id="output"><b>识别结果：</b><br><span id="resultArea">暂无</span></div>
 
-  <!-- ZXing 库 -->
-  <script src="https://unpkg.com/@zxing/browser@latest"></script>
-  <script src="https://unpkg.com/@zxing/library@latest"></script>
+  <!-- ZXing 最新模块版 -->
+  <script type="module">
+    import { BrowserMultiFormatReader, NotFoundException } from 'https://unpkg.com/@zxing/browser@latest?module';
 
-  <script>
     const startBtn = document.getElementById('startBtn');
     const video = document.getElementById('video');
     const overlay = document.getElementById('overlay');
@@ -103,10 +102,11 @@
       resultArea.innerText = "正在启动摄像头...";
       foundCodes.clear();
 
-      codeReader = new ZXing.BrowserMultiFormatReader();
+      codeReader = new BrowserMultiFormatReader();
 
       try {
-        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+        // 获取视频输入设备
+        const devices = await BrowserMultiFormatReader.listVideoInputDevices();
         if (devices.length === 0) {
           resultArea.innerText = "未找到摄像头";
           scanning = false;
@@ -116,9 +116,10 @@
         const selectedDeviceId = devices[0].deviceId;
         const keyword = keywordInput.value.trim();
 
-        resultArea.innerText = "正在扫描，请将多个二维码放入摄像头视野中...";
+        resultArea.innerText = "正在扫描，请将二维码放入摄像头视野中...";
 
-        const controls = await codeReader.decodeFromVideoDevice(selectedDeviceId, video, (result, err) => {
+        // 开始扫描视频
+        codeReader.decodeFromVideoDevice(selectedDeviceId, video, (result, err) => {
           if (result) {
             const text = result.getText();
             if (!foundCodes.has(text)) {
@@ -128,16 +129,19 @@
               }
             }
           }
+          if (err && !(err instanceof NotFoundException)) {
+            console.error(err);
+          }
         });
 
-        // 绘制动态闪烁边框
+        // 绘制高亮闪烁框
         function animateHighlight() {
           ctx.clearRect(0, 0, overlay.width, overlay.height);
           overlay.width = video.videoWidth;
           overlay.height = video.videoHeight;
           time += 0.1;
 
-          const results = codeReader.lastResults;
+          const results = codeReader.hints?.results || [];
           if (results && results.length > 0) {
             for (let res of results) {
               if (!res.resultPoints) continue;
