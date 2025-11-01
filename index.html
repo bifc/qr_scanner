@@ -2,33 +2,33 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>多二维码扫描（ZXing，多码优化）</title>
+<title>多二维码扫描（兼容手机/PC）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: #f4f6f9; padding: 20px; }
-  #controls { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 15px; }
-  input { padding: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; width: 220px; }
-  button { background: #007bff; color: #fff; border: none; padding: 10px 18px; border-radius: 8px; font-size: 16px; cursor: pointer; }
-  button:hover { background: #0056b3; }
-  #container { position: relative; display: inline-block; }
-  #video { width: 100%; max-width: 600px; border-radius: 12px; background: #000; }
-  #overlay { position: absolute; top: 0; left: 0; width: 100%; max-width: 600px; border-radius: 12px; pointer-events: none; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: #f4f6f9; padding: 20px; }
+#controls { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 15px; }
+input { padding: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; width: 220px; }
+button { background: #007bff; color: #fff; border: none; padding: 10px 18px; border-radius: 8px; font-size: 16px; cursor: pointer; }
+button:hover { background: #0056b3; }
+#container { position: relative; display: inline-block; }
+#video { width: 100%; max-width: 600px; border-radius: 12px; background: #000; }
+#overlay { position: absolute; top: 0; left: 0; width: 100%; max-width: 600px; border-radius: 12px; pointer-events: none; }
 </style>
 </head>
 <body>
 
-<h2>多二维码扫描（ZXing，多码优化）</h2>
+<h2>多二维码扫描（兼容手机/PC）</h2>
 <div id="controls">
-  <input type="text" id="keyword" placeholder="输入关键字过滤（可选）" />
-  <button id="startBtn">Start Scan</button>
+<input type="text" id="keyword" placeholder="输入关键字过滤（可选）" />
+<button id="startBtn">Start Scan</button>
 </div>
 
 <div id="container">
-  <video id="video" autoplay muted playsinline></video>
-  <canvas id="overlay"></canvas>
+<video id="video" autoplay muted playsinline></video>
+<canvas id="overlay"></canvas>
 </div>
 
-<script src="https://unpkg.com/@zxing/browser@latest"></script>
+<script src="https://unpkg.com/@zxing/library@latest"></script>
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
@@ -37,81 +37,90 @@ const startBtn = document.getElementById('startBtn');
 const keywordInput = document.getElementById('keyword');
 
 let codeReader;
-let foundCodes = new Map(); // 存储二维码内容+角点+时间戳
 let scanning = false;
+let foundCodes = new Map(); // 存储内容+位置+时间戳
 
 startBtn.addEventListener('click', async () => {
-  if (scanning) return;
-  scanning = true;
-  foundCodes.clear();
+    if (scanning) return;
+    scanning = true;
+    foundCodes.clear();
 
-  codeReader = new ZXing.BrowserMultiFormatContinuousReader();
+    codeReader = new ZXing.BrowserMultiFormatReader();
 
-  try {
-    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
-    if (!devices || devices.length === 0) {
-      alert("未找到摄像头");
-      scanning = false;
-      return;
+    try {
+        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+        if (!devices || devices.length === 0) {
+            alert("未找到摄像头");
+            scanning = false;
+            return;
+        }
+        const selectedDeviceId = devices[0].deviceId;
+
+        // 打开摄像头
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: selectedDeviceId } });
+        video.srcObject = stream;
+
+        // 每 100ms 扫描一次视频帧，实现多二维码识别
+        async function scanLoop() {
+            try {
+                const hints = new Map();
+                const result = await codeReader.decodeOnceFromVideoElement(video);
+                if (result) {
+                    const now = Date.now();
+                    foundCodes.set(result.getText(), { points: result.resultPoints, timestamp: now });
+                }
+            } catch(e) {
+                // 捕获没识别到的情况
+            }
+            requestAnimationFrame(scanLoop);
+        }
+        scanLoop();
+
+        animate();
+
+    } catch (e) {
+        alert("无法访问摄像头：" + e);
+        scanning = false;
     }
-    const selectedDeviceId = devices[0].deviceId;
-
-    await codeReader.decodeFromVideoDevice(selectedDeviceId, video, (result, err) => {
-      const now = Date.now();
-      if (result) {
-        // 保存二维码内容+时间+位置（ZXing 只有 resultPoints）
-        foundCodes.set(result.getText(), { points: result.resultPoints, timestamp: now });
-      }
-    });
-
-    animate();
-  } catch (e) {
-    alert("无法访问摄像头：" + e);
-    scanning = false;
-  }
 });
 
 function animate() {
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const t = Date.now() / 300;
-  const now = Date.now();
-  const keyword = keywordInput.value.trim();
+    const t = Date.now() / 300;
+    const now = Date.now();
+    const keyword = keywordInput.value.trim();
 
-  // 移除超过 500ms 未更新的二维码
-  for (let [text, info] of foundCodes) {
-    if (now - info.timestamp > 500) foundCodes.delete(text);
-  }
+    // 清理过期二维码
+    for (let [text, info] of foundCodes) {
+        if (now - info.timestamp > 500) foundCodes.delete(text);
+    }
 
-  // 绘制所有二维码
-  for (let [text, info] of foundCodes) {
-    const points = info.points;
-    if (!points || points.length < 3) continue;
+    for (let [text, info] of foundCodes) {
+        const points = info.points;
+        if (!points || points.length < 3) continue;
 
-    // 边框颜色高亮
-    const match = keyword && text.includes(keyword);
-    ctx.strokeStyle = match ? `rgba(255,255,0,${0.5 + 0.5*Math.sin(t)})` 
-                            : `rgba(0,255,0,${0.5 + 0.5*Math.sin(t)})`;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
-    ctx.closePath();
-    ctx.stroke();
+        const match = keyword && text.includes(keyword);
+        ctx.strokeStyle = match ? `rgba(255,255,0,${0.5 + 0.5*Math.sin(t)})` : `rgba(0,255,0,${0.5 + 0.5*Math.sin(t)})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+        ctx.closePath();
+        ctx.stroke();
 
-    // 中心显示二维码内容
-    const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length;
-    const cy = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-    ctx.fillStyle = 'yellow';
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, cx, cy);
-  }
+        const cx = points.reduce((sum, p) => sum + p.x, 0)/points.length;
+        const cy = points.reduce((sum, p) => sum + p.y, 0)/points.length;
+        ctx.fillStyle = 'yellow';
+        ctx.font = '16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, cx, cy);
+    }
 
-  requestAnimationFrame(animate);
+    requestAnimationFrame(animate);
 }
 </script>
 
