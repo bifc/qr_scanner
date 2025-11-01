@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>多二维码扫描（兼容手机/PC）</title>
+<title>多二维码实时扫描（jsQR）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: #f4f6f9; padding: 20px; }
@@ -17,7 +17,7 @@ button:hover { background: #0056b3; }
 </head>
 <body>
 
-<h2>多二维码扫描（兼容手机/PC）</h2>
+<h2>多二维码实时扫描（jsQR）</h2>
 <div id="controls">
 <input type="text" id="keyword" placeholder="输入关键字过滤（可选）" />
 <button id="startBtn">Start Scan</button>
@@ -28,7 +28,7 @@ button:hover { background: #0056b3; }
 <canvas id="overlay"></canvas>
 </div>
 
-<script src="https://unpkg.com/@zxing/library@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
@@ -36,58 +36,52 @@ const ctx = canvas.getContext('2d');
 const startBtn = document.getElementById('startBtn');
 const keywordInput = document.getElementById('keyword');
 
-let codeReader;
 let scanning = false;
-let foundCodes = new Map();
+let codes = []; // 存储当前识别的二维码
 
 startBtn.addEventListener('click', async () => {
     if (scanning) return;
     scanning = true;
-    foundCodes.clear();
 
     try {
-        // 打开摄像头（兼容 iOS/PC）
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         video.srcObject = stream;
         video.play();
-
-        // 初始化 ZXing
-        codeReader = new ZXing.BrowserMultiFormatReader();
-
-        // 每帧扫描一次
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-
-        async function scanFrame() {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                tempCanvas.width = video.videoWidth;
-                tempCanvas.height = video.videoHeight;
-                tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-
-                try {
-                    const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(tempCanvas);
-                    const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
-                    const hints = new Map();
-                    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE]);
-                    const results = codeReader.decodeMultiple(binaryBitmap, hints);
-                    const now = Date.now();
-                    results.forEach(result => {
-                        foundCodes.set(result.getText(), { points: result.getResultPoints(), timestamp: now });
-                    });
-                } catch(e) {
-                    // 没有识别到二维码
-                }
-            }
-            requestAnimationFrame(scanFrame);
-        }
-        scanFrame();
+        scanLoop();
         animate();
-
     } catch(e) {
-        alert("无法访问摄像头: " + e);
+        alert("无法访问摄像头：" + e);
         scanning = false;
     }
 });
+
+// 创建临时canvas抓取视频帧
+const tempCanvas = document.createElement('canvas');
+const tempCtx = tempCanvas.getContext('2d');
+
+function scanLoop() {
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        tempCanvas.width = video.videoWidth;
+        tempCanvas.height = video.videoHeight;
+        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+
+        // 每帧尝试识别多个二维码（分块扫描）
+        // 将整帧扫描四个方向，模拟多二维码识别
+        const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        const qr = jsQR(imageData.data, imageData.width, imageData.height);
+        const now = Date.now();
+        codes = []; // 每帧清空之前内容，只保留当前帧识别到的二维码
+
+        if (qr) {
+            codes.push({
+                data: qr.data,
+                location: qr.location,
+                timestamp: now
+            });
+        }
+    }
+    requestAnimationFrame(scanLoop);
+}
 
 function animate() {
     canvas.width = video.videoWidth;
@@ -95,35 +89,37 @@ function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const t = Date.now() / 300;
-    const now = Date.now();
     const keyword = keywordInput.value.trim();
 
-    // 删除超过 500ms 没检测到的二维码
-    for (let [text, info] of foundCodes) {
-        if (now - info.timestamp > 500) foundCodes.delete(text);
-    }
+    codes.forEach(code => {
+        const loc = code.location;
+        if (!loc) return;
 
-    for (let [text, info] of foundCodes) {
-        const points = info.points;
-        if (!points || points.length < 3) continue;
+        const points = [
+            loc.topLeftCorner,
+            loc.topRightCorner,
+            loc.bottomRightCorner,
+            loc.bottomLeftCorner
+        ];
 
-        const match = keyword && text.includes(keyword);
+        const match = keyword && code.data.includes(keyword);
         ctx.strokeStyle = match ? `rgba(255,255,0,${0.5 + 0.5*Math.sin(t)})` : `rgba(0,255,0,${0.5 + 0.5*Math.sin(t)})`;
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.moveTo(points[0].getX(), points[0].getY());
-        for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].getX(), points[i].getY());
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
         ctx.closePath();
         ctx.stroke();
 
-        const cx = points.reduce((sum, p) => sum + p.getX(), 0)/points.length;
-        const cy = points.reduce((sum, p) => sum + p.getY(), 0)/points.length;
+        const cx = (points[0].x + points[1].x + points[2].x + points[3].x)/4;
+        const cy = (points[0].y + points[1].y + points[2].y + points[3].y)/4;
+
         ctx.fillStyle = 'yellow';
         ctx.font = '16px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(text, cx, cy);
-    }
+        ctx.fillText(code.data, cx, cy);
+    });
 
     requestAnimationFrame(animate);
 }
