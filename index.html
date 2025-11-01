@@ -38,48 +38,53 @@ const keywordInput = document.getElementById('keyword');
 
 let codeReader;
 let scanning = false;
-let foundCodes = new Map(); // 存储内容+位置+时间戳
+let foundCodes = new Map();
 
 startBtn.addEventListener('click', async () => {
     if (scanning) return;
     scanning = true;
     foundCodes.clear();
 
-    codeReader = new ZXing.BrowserMultiFormatReader();
-
     try {
-        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
-        if (!devices || devices.length === 0) {
-            alert("未找到摄像头");
-            scanning = false;
-            return;
-        }
-        const selectedDeviceId = devices[0].deviceId;
-
-        // 打开摄像头
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: selectedDeviceId } });
+        // 打开摄像头（兼容 iOS/PC）
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         video.srcObject = stream;
+        video.play();
 
-        // 每 100ms 扫描一次视频帧，实现多二维码识别
-        async function scanLoop() {
-            try {
-                const hints = new Map();
-                const result = await codeReader.decodeOnceFromVideoElement(video);
-                if (result) {
+        // 初始化 ZXing
+        codeReader = new ZXing.BrowserMultiFormatReader();
+
+        // 每帧扫描一次
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+
+        async function scanFrame() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                tempCanvas.width = video.videoWidth;
+                tempCanvas.height = video.videoHeight;
+                tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+
+                try {
+                    const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(tempCanvas);
+                    const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+                    const hints = new Map();
+                    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE]);
+                    const results = codeReader.decodeMultiple(binaryBitmap, hints);
                     const now = Date.now();
-                    foundCodes.set(result.getText(), { points: result.resultPoints, timestamp: now });
+                    results.forEach(result => {
+                        foundCodes.set(result.getText(), { points: result.getResultPoints(), timestamp: now });
+                    });
+                } catch(e) {
+                    // 没有识别到二维码
                 }
-            } catch(e) {
-                // 捕获没识别到的情况
             }
-            requestAnimationFrame(scanLoop);
+            requestAnimationFrame(scanFrame);
         }
-        scanLoop();
-
+        scanFrame();
         animate();
 
-    } catch (e) {
-        alert("无法访问摄像头：" + e);
+    } catch(e) {
+        alert("无法访问摄像头: " + e);
         scanning = false;
     }
 });
@@ -93,7 +98,7 @@ function animate() {
     const now = Date.now();
     const keyword = keywordInput.value.trim();
 
-    // 清理过期二维码
+    // 删除超过 500ms 没检测到的二维码
     for (let [text, info] of foundCodes) {
         if (now - info.timestamp > 500) foundCodes.delete(text);
     }
@@ -106,13 +111,13 @@ function animate() {
         ctx.strokeStyle = match ? `rgba(255,255,0,${0.5 + 0.5*Math.sin(t)})` : `rgba(0,255,0,${0.5 + 0.5*Math.sin(t)})`;
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+        ctx.moveTo(points[0].getX(), points[0].getY());
+        for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].getX(), points[i].getY());
         ctx.closePath();
         ctx.stroke();
 
-        const cx = points.reduce((sum, p) => sum + p.x, 0)/points.length;
-        const cy = points.reduce((sum, p) => sum + p.y, 0)/points.length;
+        const cx = points.reduce((sum, p) => sum + p.getX(), 0)/points.length;
+        const cy = points.reduce((sum, p) => sum + p.getY(), 0)/points.length;
         ctx.fillStyle = 'yellow';
         ctx.font = '16px sans-serif';
         ctx.textAlign = 'center';
