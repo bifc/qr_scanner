@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>多二维码扫描（最终版 UMD）</title>
+<title>多二维码扫描（跨浏览器可用）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   body {
@@ -67,97 +67,68 @@
 </style>
 </head>
 <body>
-  <h2>多二维码扫描（最终版）</h2>
-  <div id="controls">
-    <input type="text" id="keyword" placeholder="输入关键字过滤（可选）" />
-    <button id="startBtn">Start Scan</button>
-  </div>
+<h2>多二维码扫描（跨浏览器）</h2>
+<div id="controls">
+  <input type="text" id="keyword" placeholder="输入关键字过滤（可选）" />
+  <button id="startBtn">Start Scan</button>
+</div>
 
-  <div id="container">
-    <video id="video" autoplay muted playsinline></video>
-    <canvas id="overlay"></canvas>
-  </div>
+<div id="container">
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="overlay"></canvas>
+</div>
 
-  <div id="output"><b>识别结果：</b><br><span id="resultArea">暂无</span></div>
+<div id="output"><b>识别结果：</b><br><span id="resultArea">暂无</span></div>
 
-  <!-- ZXing UMD 版 -->
-  <script src="https://unpkg.com/@zxing/browser@latest/dist/index.umd.min.js"></script>
+<!-- 引入 qr-scanner -->
+<script type="module">
+import QrScanner from "https://unpkg.com/qr-scanner/qr-scanner.min.js";
 
-  <script>
-    const startBtn = document.getElementById('startBtn');
-    const video = document.getElementById('video');
-    const overlay = document.getElementById('overlay');
-    const ctx = overlay.getContext('2d');
-    const resultArea = document.getElementById('resultArea');
-    const keywordInput = document.getElementById('keyword');
+const video = document.getElementById('video');
+const canvas = document.getElementById('overlay');
+const ctx = canvas.getContext('2d');
+const resultArea = document.getElementById('resultArea');
+const keywordInput = document.getElementById('keyword');
+const startBtn = document.getElementById('startBtn');
 
-    let scanning = false;
-    let foundCodes = new Set();
-    let codeReader;
-    let animationFrame;
-    let time = 0;
+let foundCodes = new Set();
+let scanning = false;
 
-    startBtn.addEventListener('click', async () => {
-      if (scanning) return;
-      scanning = true;
-      resultArea.innerText = "正在启动摄像头...";
-      foundCodes.clear();
+startBtn.addEventListener('click', async () => {
+  if (scanning) return;
+  scanning = true;
+  resultArea.innerText = "正在启动摄像头...";
+  foundCodes.clear();
 
-      codeReader = new ZXing.BrowserMultiFormatReader();
+  // 初始化 QR 扫描器
+  const qrScanner = new QrScanner(video, result => {
+    const keyword = keywordInput.value.trim();
+    if (!foundCodes.has(result) && (!keyword || result.includes(keyword))) {
+      foundCodes.add(result);
+      resultArea.innerHTML += `<br>✅ ${result}`;
+    }
+  }, {
+    highlightScanRegion: true,
+    highlightCodeOutline: true,
+  });
 
-      try {
-        // 获取摄像头设备
-        const devices = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
-        if (devices.length === 0) {
-          resultArea.innerText = "未找到摄像头";
-          scanning = false;
-          return;
-        }
+  try {
+    await qrScanner.start();
+    resultArea.innerText = "正在扫描二维码...";
+    animateHighlight();
+  } catch (e) {
+    resultArea.innerText = "无法访问摄像头：" + e;
+    scanning = false;
+  }
 
-        const selectedDeviceId = devices[0].deviceId;
-        const keyword = keywordInput.value.trim();
-
-        resultArea.innerText = "正在扫描，请将二维码放入摄像头视野中...";
-
-        // 开始扫描视频
-        codeReader.decodeFromVideoDevice(selectedDeviceId, video, (result, err) => {
-          if (result) {
-            const text = result.getText();
-            if (!foundCodes.has(text)) {
-              if (!keyword || text.includes(keyword)) {
-                foundCodes.add(text);
-                resultArea.innerHTML += `<br>✅ ${text}`;
-              }
-            }
-          }
-          if (err && !(err instanceof ZXing.NotFoundException)) {
-            console.error(err);
-          }
-        });
-
-        // 高亮绘制（简化版）
-        function animateHighlight() {
-          ctx.clearRect(0, 0, overlay.width, overlay.height);
-          overlay.width = video.videoWidth;
-          overlay.height = video.videoHeight;
-          time += 0.1;
-
-          // UMD ZXing 目前不提供多码位置，所以这里只做闪烁效果
-          ctx.strokeStyle = `rgba(0,255,0,${0.3 + 0.3 * Math.sin(time * 3)})`;
-          ctx.lineWidth = 4;
-          ctx.strokeRect(20, 20, overlay.width-40, overlay.height-40);
-
-          animationFrame = requestAnimationFrame(animateHighlight);
-        }
-
-        animateHighlight();
-
-      } catch (e) {
-        console.error(e);
-        resultArea.innerText = "无法访问摄像头：" + e;
-        scanning = false;
-      }
-    });
-  </script>
+  function animateHighlight() {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // qr-scanner 会自动绘制扫描区域和二维码轮廓
+    requestAnimationFrame(animateHighlight);
+  }
+});
+</script>
 </body>
 </html>
